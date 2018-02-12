@@ -48,3 +48,6 @@ spotbugs/web/
 spotbugsTestCases/build/
 spotbugsTestCases/history/
 *.log
+
+/jqassistant/report
+/jqassistant/store

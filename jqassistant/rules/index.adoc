@@ -1,0 +1,103 @@
+= Place Here Your Coding Rules
+
+Some examples:
+
+[[default]]
+[role=group,includesConcepts="package:PackageSize,dependency:TransitivePackageDependencies,structure:ComponentDependencies.graphml", includesConstraints="component:Cycles(critical)"]
+- <<package:PackageLevel>>
+- <<dependency:TransitivePackageDependencies>>
+- <<component:Cycles>>
+- <<package:PackageSize>>
+
+
+[[component:Cycles]]
+.There must be no cyclic dependencies between components.
+[source,cypher,role=constraint,requiresConcepts="component:MarkComponents"]
+----
+MATCH
+    (c1:Component)-[d:DEPENDS_ON]->(c2:Component)
+WHERE
+    (c2)-[:DEPENDS_ON]->(c1)
+RETURN
+    c1.fqn, c2.fqn
+----
+
+[[package:PackageLevel]]
+.Set the level property of a package, e.g. 1 for de, 2 for de.kontext_e and so on.
+[source,cypher,role=concept,requiresConcepts="dependency:Package"]
+----
+MATCH
+    (p:Java:Package)
+WITH
+    SPLIT(p.fqn,".") AS splitted, p
+SET
+    p.level=SIZE(splitted)
+RETURN
+    splitted, SIZE(splitted);
+----
+
+[[dependency:TransitivePackageDependencies]]
+.Add a DEPENDS_ON relationship to parents of a package P from other packages up to the same level of the source package.
+[source,cypher,role=concept,requiresConcepts="package:PackageLevel"]
+----
+MATCH
+    (p:Java:Package)-[:DEPENDS_ON]->(p2:Java:Package),
+    (parent:Java:Package)-[:CONTAINS*]->(p2:Java:Package)
+WHERE
+    p.level <= parent.level
+CREATE UNIQUE
+    (p)-[:DEPENDS_ON]->(parent)
+RETURN
+    p.fqn, parent.fqn;
+----
+
+[[component:MarkComponents]]
+.Mark architecture components.
+[source,cypher,role=concept,requiresConcepts="package:PackageLevel"]
+----
+MATCH
+    (p:Java:Package)
+WHERE
+    p.fqn starts with 'edu' AND (p.level=4 or p.level=5)
+SET
+    p:C4:Component
+RETURN
+    p.fqn
+----
+
+[[package:PackageSize]]
+.Sets the property 'size' of a package to the number of contained types.
+[source,cypher,role=concept]
+----
+MATCH
+    (p:Java:Package)-[:CONTAINS]->(t:Java:Type)
+WHERE
+    p.fqn STARTS WITH 'edu.umd.cs.findbugs'
+WITH
+    p, count(t) as types
+SET
+    p.size=types
+RETURN
+    p.fqn, p.size
+ORDER BY
+    types desc
+----
+
+=== Reports
+
+Create the GraphML file with
+mvn -D"jqassistant.concepts=structure:ComponentDependencies.graphml" jqassistant:analyze
+
+TIP: GraphML reports may be viewed using http://www.yworks.com/en/products/yfiles/yed/[yEd]. After opening a file you
+should apply a layout, e.g. menu:Layout[Hierarchical].
+
+
+[[structure:ComponentDependencies.graphml]]
+[source,cypher,role=concept,requiresConcepts="component:MarkComponents",reportType="graphml"]
+.Actual usage dependencies between the Components.
+----
+MATCH
+    (c1:C4:Component)-[dependsOn:DEPENDS_ON]->(c2:C4:Component)
+RETURN
+    c1, dependsOn, c2
+----
