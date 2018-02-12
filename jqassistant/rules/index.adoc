@@ -3,7 +3,7 @@
 Some examples:
 
 [[default]]
-[role=group,includesConcepts="package:PackageSize,dependency:TransitivePackageDependencies,structure:ComponentDependencies.graphml", includesConstraints="component:Cycles(critical)"]
+[role=group,includesConcepts="structure:ComponentCycleReport,package:PackageSize,dependency:TransitivePackageDependencies,structure:ComponentDependencies.graphml", includesConstraints="component:Cycles(critical)"]
 - <<package:PackageLevel>>
 - <<dependency:TransitivePackageDependencies>>
 - <<component:Cycles>>
@@ -83,6 +83,41 @@ ORDER BY
     types desc
 ----
 
+[[package:DependencyDegree]]
+.Sets the property 'degree' of a package dependency relation to the number of types a package depends on.
+[source,cypher,role=concept]
+----
+MATCH
+    (p1:Package)-[:CONTAINS]->(t1:Type)-[:DEPENDS_ON]->(t2:Type)<-[:CONTAINS]-(p2:Package)
+WHERE
+    p1<>p2
+CREATE UNIQUE
+    (p1)-[d:DEPENDS_ON]->(p2)
+WITH
+    p1, p2, COUNT(DISTINCT t2) AS PackageDependencies, d
+SET
+	d.degree=PackageDependencies
+RETURN
+	p1.fqn as package, d.degree, p2.fqn
+----
+
+[[component:DependencyDegree]]
+.Sets the property 'degree' of a component dependency relation to the number of types a package depends on.
+[source,cypher,role=concept]
+----
+MATCH
+    (p1:Component)-[:CONTAINS*]->(t1:Type)-[:DEPENDS_ON]->(t2:Type)<-[:CONTAINS*]-(p2:Component)
+WHERE
+    p1<>p2
+CREATE UNIQUE
+    (p1)-[d:DEPENDS_ON]->(p2)
+WITH
+    p1, p2, COUNT(DISTINCT t2) AS PackageDependencies, d
+SET
+	d.degree=PackageDependencies
+RETURN
+	p1.fqn as package, d.degree, p2.fqn
+
 === Reports
 
 Create the GraphML file with
@@ -100,4 +135,17 @@ MATCH
     (c1:C4:Component)-[dependsOn:DEPENDS_ON]->(c2:C4:Component)
 RETURN
     c1, dependsOn, c2
+----
+
+[[structure:ComponentCycleReport]]
+[source,cypher,role=concept,requiresConcepts="component:MarkComponents, package:DependencyDegree"]
+.Compares the dependency degree of cyclic components.
+----
+MATCH
+    (c1:Component)-[d1:DEPENDS_ON]->(c2:Component),
+    (c2)-[d2:DEPENDS_ON]->(c1)
+RETURN
+    c1.fqn, c2.fqn, d1.degree, d2.degree
+ORDER BY
+	c1.fqn, c2.fqn
 ----
